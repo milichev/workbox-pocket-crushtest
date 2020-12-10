@@ -2,15 +2,25 @@ import { Workbox } from 'https://storage.googleapis.com/workbox-cdn/releases/6.0
 
 console.log('👋🏼 index.js', { Workbox });
 
+const delay = async ({ ms = 0, fail = false, payload = undefined } = {}) =>
+  new Promise((resolve, reject) => {
+    setTimeout((fail ? reject : resolve).bind(null, payload), ms);
+  });
+
 async function init() {
   const notifySw = document.querySelector('#notify-sw');
+  const getMsgSw = document.querySelector('#get-msg');
   const notifyText = document.querySelector('#notify-text');
   const updateButton = document.querySelector('#update-app');
 
-  updateButton.disabled = true;
+  [notifySw, getMsgSw, notifyText, updateButton].forEach(
+    (el) => (el.disabled = true)
+  );
 
   if ('serviceWorker' in navigator) {
     const wb = new Workbox('/service-worker.js');
+
+    [notifySw, getMsgSw, notifyText].forEach((el) => (el.disabled = false));
 
     wb.addEventListener('activated', (event) => {
       // `event.isUpdate` will be true if another version of the service
@@ -63,11 +73,25 @@ async function init() {
       });
     });
 
-    setTimeout(async () => {
-      const sw = await wb.getSW();
+    getMsgSw.addEventListener('click', async () => {
+      try {
+        const result = await Promise.race([
+          wb.messageSW({ type: 'READ_TEXT' }),
+          delay({ ms: 250, fail: true, payload: 'timeout' }),
+        ]);
+        console.info('got result', result);
+      } catch (err) {
+        if (err === 'timeout') {
+          console.warn('no result');
+        } else {
+          console.error('error', err);
+        }
+      }
+    });
 
-      console.log('reg', { reg, sw, wb });
-    }, 200);
+    const sw = await wb.getSW();
+
+    console.log('reg', { reg, sw, wb });
   } else {
     notifySw.style.display = 'none';
     notifyText.style.display = 'none';
